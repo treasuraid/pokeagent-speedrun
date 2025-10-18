@@ -80,7 +80,7 @@ class Agent:
             # Four-module processing
             try:
                 # Extract key components from game_state
-                screenshot = game_state.get('screenshot')
+                screenshot = game_state.get('frame')  # The key is 'frame', not 'screenshot'
                 state_data = game_state
 
                 # Initialize tracking variables if not present
