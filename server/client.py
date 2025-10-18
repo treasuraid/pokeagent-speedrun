@@ -89,7 +89,11 @@ def run_multiprocess_client(server_port=8000, args=None):
         mode = "AUTO"
     else:
         mode = "AGENT"
-    
+
+    print(f"🎮 Initial mode: {mode}")
+    print(f"   Manual flag: {args.manual if args else 'No args'}")
+    print(f"   Agent auto flag: {args.agent_auto if args else 'No args'}")
+
     last_agent_time = time.time()
     step_count = 0
     
@@ -208,6 +212,7 @@ def run_multiprocess_client(server_port=8000, args=None):
                         # Manual controls (only in manual mode)
                         elif mode == "MANUAL":
                             action = None
+                            print(f"[DEBUG] MANUAL mode key pressed: {pygame.key.name(event.key)}")
                             if event.key in (pygame.K_UP, pygame.K_w):
                                 action = "UP"
                             elif event.key in (pygame.K_DOWN, pygame.K_s):
