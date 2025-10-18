@@ -520,9 +520,11 @@
         let isConnected = false;
         let frameUpdateInterval;
         
-        // Detect server address dynamically
-        const serverUrl = `http://${window.location.hostname}:${window.location.port || '8000'}`;
-        const frameServerUrl = `http://${window.location.hostname}:8001`; // Separate frame server
+        // Detect server address dynamically (use same protocol as page - HTTPS or HTTP)
+        const protocol = window.location.protocol; // 'https:' or 'http:'
+        <!-- const serverUrl = `${protocol}//${window.location.hostname}:${window.location.port || '8001'}`; -->
+        const serverUrl = `${protocol}//${window.location.hostname}`;
+        const frameServerUrl = serverUrl; // Use same URL for frame server in K8s
         console.log(`Using server URL: ${serverUrl}`);
         console.log(`Using frame server URL: ${frameServerUrl}`);
         
@@ -537,7 +539,7 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
                 
-                const response = await fetch(`${frameServerUrl}/frame`, {
+                const response = await fetch(`${frameServerUrl}/api/frame`, {
                     signal: controller.signal,
                     method: 'GET',
                     cache: 'no-cache'
@@ -671,7 +673,7 @@
         let streamingSource = null;
         let currentMessage = null;
         let isMessageComplete = true;
-        
+
         function initializeAgentStreaming() {
             const agentThinkingDiv = document.getElementById('agent-thinking');
             
@@ -771,7 +773,7 @@
             if (streamingSource && streamingSource.readyState === EventSource.OPEN) {
                 return;
             }
-            
+
             try {
                 const response = await fetch(`${serverUrl}/agent`);
                 const data = await response.json();
@@ -1091,7 +1093,7 @@
             updatePartyStatus();
         }, 2000); // Update every 2 seconds (reduced from 1s)
 
-        // Less frequent updates for milestones  
+        // Less frequent updates for milestones
         setInterval(() => {
             updateMilestones();
         }, 10000); // Update every 10 seconds (reduced from 5s)
@@ -1100,6 +1102,137 @@
         updateRecentActions();
         updateMilestones();
         updatePartyStatus();
+
+        // ========================================
+        // KEYBOARD CONTROLS FOR MANUAL MODE
+        // ========================================
+
+        // Track control mode
+        let controlsEnabled = false;
+        let controlModeIndicator = null;
+
+        // Create control mode indicator
+        function createControlIndicator() {
+            const indicator = document.createElement('div');
+            indicator.id = 'control-indicator';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 70px;
+                right: 20px;
+                background-color: #1a1a1a;
+                border: 2px solid #33ff33;
+                padding: 10px 15px;
+                font-family: 'VT323', monospace;
+                font-size: 14px;
+                color: #33ff33;
+                z-index: 1000;
+                box-shadow: 0 0 10px #33ff33;
+            `;
+            indicator.innerHTML = `
+                <div style="margin-bottom: 5px;">🎮 KEYBOARD CONTROLS</div>
+                <div style="font-size: 12px; color: #666;">Press <span style="color: #ff6177;">C</span> to toggle</div>
+                <div style="font-size: 12px; margin-top: 5px;">
+                    WASD/Arrows = Move<br/>
+                    Z = A | X = B<br/>
+                    Enter = START | BS = SELECT
+                </div>
+            `;
+            document.body.appendChild(indicator);
+            controlModeIndicator = indicator;
+            updateControlIndicator();
+        }
+
+        // Update indicator appearance
+        function updateControlIndicator() {
+            if (!controlModeIndicator) return;
+
+            if (controlsEnabled) {
+                controlModeIndicator.style.borderColor = '#ff6177';
+                controlModeIndicator.style.boxShadow = '0 0 15px #ff6177';
+                controlModeIndicator.querySelector('div').innerHTML = '🎮 CONTROLS: <span style="color: #ff6177;">ENABLED</span>';
+            } else {
+                controlModeIndicator.style.borderColor = '#666';
+                controlModeIndicator.style.boxShadow = 'none';
+                controlModeIndicator.querySelector('div').innerHTML = '🎮 CONTROLS: <span style="color: #666;">DISABLED</span>';
+            }
+        }
+
+        // Send action to server
+        async function sendAction(button) {
+            try {
+                const response = await fetch(`${serverUrl}/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ buttons: [button] })
+                });
+
+                if (response.ok) {
+                    console.log(`✅ Sent action: ${button}`);
+                } else {
+                    console.error(`❌ Failed to send action: ${response.status}`);
+                }
+            } catch (error) {
+                console.error(`❌ Error sending action:`, error);
+            }
+        }
+
+        // Keyboard event handler
+        document.addEventListener('keydown', function(event) {
+            // Toggle controls with 'C' key
+            if (event.key.toLowerCase() === 'c') {
+                controlsEnabled = !controlsEnabled;
+                updateControlIndicator();
+                console.log(`Keyboard controls ${controlsEnabled ? 'ENABLED' : 'DISABLED'}`);
+                event.preventDefault();
+                return;
+            }
+
+            // Only process game controls if enabled
+            if (!controlsEnabled) return;
+
+            let button = null;
+
+            // Movement keys
+            if (event.key === 'ArrowUp' || event.key.toLowerCase() === 'w') {
+                button = 'UP';
+            } else if (event.key === 'ArrowDown' || event.key.toLowerCase() === 's') {
+                button = 'DOWN';
+            } else if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') {
+                button = 'LEFT';
+            } else if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') {
+                button = 'RIGHT';
+            }
+            // Action buttons
+            else if (event.key.toLowerCase() === 'z') {
+                button = 'A';
+            } else if (event.key.toLowerCase() === 'x') {
+                button = 'B';
+            }
+            // Menu buttons
+            else if (event.key === 'Enter') {
+                button = 'START';
+            } else if (event.key === 'Backspace') {
+                button = 'SELECT';
+            }
+            // Shoulder buttons
+            else if (event.key.toLowerCase() === 'q') {
+                button = 'L';
+            } else if (event.key.toLowerCase() === 'e') {
+                button = 'R';
+            }
+
+            if (button) {
+                sendAction(button);
+                event.preventDefault(); // Prevent default browser behavior
+            }
+        });
+
+        // Create the indicator on page load
+        createControlIndicator();
+
+        console.log('🎮 Keyboard controls initialized. Press C to enable/disable manual control.');
     </script>
 </body>
 </html>
