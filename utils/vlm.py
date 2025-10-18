@@ -773,7 +773,7 @@ class GeminiBackend(VLMBackend):
 class VLM:
     """Main VLM class that supports multiple backends"""
     
-    BACKENDS = {
+    BACKENDS: dict[str, VLMBackend]= {
         'openai': OpenAIBackend,
         'openrouter': OpenRouterBackend,
         'local': LocalHuggingFaceBackend,
@@ -803,13 +803,13 @@ class VLM:
             raise ValueError(f"Unsupported backend: {self.backend_type}. Available: {list(self.BACKENDS.keys())}")
         
         # Initialize the appropriate backend
-        backend_class = self.BACKENDS[self.backend_type]
+        backend_class= self.BACKENDS[self.backend_type]
         
         # Pass port parameter for legacy Ollama backend
         if self.backend_type == 'ollama':
-            self.backend = backend_class(model_name, port=port, **kwargs)
+            self.backend: VLMBackend= backend_class(model_name, port=port, **kwargs)
         else:
-            self.backend = backend_class(model_name, **kwargs)
+            self.backend: VLMBackend = backend_class(model_name, **kwargs)
         
         logger.info(f"VLM initialized with {self.backend_type} backend using model: {model_name}")
     

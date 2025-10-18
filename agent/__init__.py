@@ -62,44 +62,105 @@ class Agent:
         Returns:
             dict: Contains 'action' and optionally 'reasoning'
         """
+        print("\n➡️ Agent step processing...")
+        print("Game state keys:", list(game_state.keys()))
+
+        # pretty print game_state
+        print("Game state summary:")
+        for key, value in game_state.items():
+            if key != 'screenshot':
+                print(f" - {key}: {type(value)}")
+            else:
+                print(f" - {key}: PIL Image")
+        
         if self.simple_mode:
             # Simple mode - delegate to SimpleAgent
             return self.simple_agent.step(game_state)
         else:
             # Four-module processing
             try:
+                # Extract key components from game_state
+                screenshot = game_state.get('screenshot')
+                state_data = game_state
+
+                # Initialize tracking variables if not present
+                if 'observation_buffer' not in self.context:
+                    self.context['observation_buffer'] = []
+                if 'recent_actions' not in self.context:
+                    self.context['recent_actions'] = []
+                if 'current_plan' not in self.context:
+                    self.context['current_plan'] = None
+                if 'memory_context' not in self.context:
+                    self.context['memory_context'] = ""
+                if 'frame_id' not in self.context:
+                    self.context['frame_id'] = 0
+
+                self.context['frame_id'] += 1
+
                 # 1. Perception - understand what's happening
-                perception_output = perception_step(
-                    self.vlm, 
-                    game_state, 
-                    self.context.get('memory', [])
+                # perception_step(frame, state_data, vlm) -> (observation, slow_thinking_needed)
+                observation, slow_thinking_needed = perception_step(
+                    screenshot,
+                    state_data,
+                    self.vlm
                 )
-                self.context['perception_output'] = perception_output
-                
+                self.context['perception_output'] = observation
+
+                # Add observation to buffer
+                self.context['observation_buffer'].append({
+                    'frame_id': self.context['frame_id'],
+                    'observation': observation,
+                    'state': state_data
+                })
+
                 # 2. Planning - decide strategy
+                # planning_step(memory_context, current_plan, slow_thinking_needed, state_data, vlm)
                 planning_output = planning_step(
-                    self.vlm, 
-                    perception_output, 
-                    self.context.get('memory', [])
+                    self.context['memory_context'],
+                    self.context['current_plan'],
+                    slow_thinking_needed,
+                    state_data,
+                    self.vlm
                 )
                 self.context['planning_output'] = planning_output
-                
+                self.context['current_plan'] = planning_output
+
                 # 3. Memory - update context
+                # memory_step(memory_context, current_plan, recent_actions, observation_buffer, vlm)
                 memory_output = memory_step(
-                    perception_output, 
-                    planning_output, 
-                    self.context.get('memory', [])
+                    self.context['memory_context'],
+                    self.context['current_plan'],
+                    self.context['recent_actions'],
+                    self.context['observation_buffer'],
+                    self.vlm
                 )
-                self.context['memory'] = memory_output
-                
+                self.context['memory_context'] = memory_output
+
                 # 4. Action - choose button press
+                # action_step(memory_context, current_plan, latest_observation, frame, state_data, recent_actions, vlm)
                 action_output = action_step(
-                    self.vlm, 
-                    game_state, 
-                    planning_output,
-                    perception_output
+                    self.context['memory_context'],
+                    self.context['current_plan'],
+                    observation,
+                    screenshot,
+                    state_data,
+                    self.context['recent_actions'],
+                    self.vlm
                 )
-                
+
+                # Store actions in recent_actions for next iteration
+                if action_output:
+                    if isinstance(action_output, list):
+                        self.context['recent_actions'].extend(action_output)
+                    else:
+                        self.context['recent_actions'].append(action_output)
+                    # Keep only last 20 actions
+                    self.context['recent_actions'] = self.context['recent_actions'][-20:]
+
+                # Clear observation buffer periodically (keep last 5)
+                if len(self.context['observation_buffer']) > 5:
+                    self.context['observation_buffer'] = self.context['observation_buffer'][-5:]
+
                 return action_output
                 
             except Exception as e:

@@ -7,7 +7,7 @@ from agent.system_prompt import system_prompt
 # Set up module logging
 logger = logging.getLogger(__name__)
 
-def perception_step(frame, state_data, vlm):
+def perception_step(frame, state_data, vlm: VLM):
     """
     Observe and describe your current situation using both visual and comprehensive state data.
     Returns (observation, slow_thinking_needed)
