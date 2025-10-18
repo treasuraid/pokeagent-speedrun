@@ -161,7 +161,8 @@ class Agent:
                 if len(self.context['observation_buffer']) > 5:
                     self.context['observation_buffer'] = self.context['observation_buffer'][-5:]
 
-                return action_output
+                # Return in the format expected by client: {'action': [...]}
+                return {'action': action_output} if action_output else None
                 
             except Exception as e:
                 print(f"❌ Agent error: {e}")
